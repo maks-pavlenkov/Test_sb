@@ -1,0 +1,20 @@
+SELECT P.CUSTOMER,
+       P.DEAL,
+       P.TOTAL_AMOUNT, -- 1. Общая (накопленная) сумма просрочки
+       P.DELAY_START_DATE, -- 2.  Дата начала текущей (последней) просрочки
+       (TRUNC(SYSDATE) - P.DELAY_START_DATE) AS Number_days_delay -- 3. Кол-во дней текущей просрочки
+  FROM (SELECT P.DT,
+               P.CUSTOMER,
+               P.DEAL,
+               P.SUM,
+               COALESCE(SUM(P.SUM)
+                        OVER(PARTITION BY P.CUSTOMER,
+                             P.DEAL ORDER BY P.DT ROWS BETWEEN UNBOUNDED
+                             PRECEDING AND CURRENT ROW),
+                        0) AS TOTAL_AMOUNT,
+               RANK() OVER(PARTITION BY P.CUSTOMER, P.DEAL ORDER BY P.DT DESC) AS R,
+               MIN(P.DT) KEEP(DENSE_RANK FIRST ORDER BY P.DT) OVER(PARTITION BY P.CUSTOMER, P.DEAL) AS DELAY_START_DATE
+          FROM PDCL P
+         WHERE P.DT <= TRUNC(SYSDATE)) P
+ WHERE P.R = 1
+   AND P.TOTAL_AMOUNT > 0;
